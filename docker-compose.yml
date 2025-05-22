@@ -1,0 +1,23 @@
+version: '3.9'
+services:
+  app:
+    build: ../../
+    container_name: lu_estilo_app
+    ports:
+      - "8000:80"
+    depends_on:
+      - db
+  db:
+    image: postgres:15
+    container_name: lu_estilo_db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+
+volumes:
+  db_data:
