@@ -1,7 +1,16 @@
-FROM python:3.13-alpine
+# Build stage
+FROM python:alpine AS builder
 
 WORKDIR /app
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-COPY ./app ./app
-CMD ["uvicorn", "app.api.main:app", "--host", "0.0.0.0", "--port", "80"]
+RUN pip install --user --cache-dir /tmp/pip-cache -r requirements.txt
+
+# Runtime stage
+FROM python:alpine
+WORKDIR /app
+COPY --from=builder /root/.local /root/.local
+COPY . .
+ENV PATH=/root/.local/bin:$PATH
+ENV PYTHONPATH=/app
+
+CMD ["fastapi", "run", "app/main.py"]
