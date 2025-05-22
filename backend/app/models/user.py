@@ -5,13 +5,13 @@ from pydantic import EmailStr
 
 class UserRole(str, Enum):
     ADMIN = "admin"
-    USER = "user"
+    CLIENT = "client"
 
 class UserBase(SQLModel):
     email: EmailStr = Field(unique=True, index=True, max_length=255)
     is_active: bool = True
     full_name: str | None = Field(default=None, max_length=255)
-    role: UserRole = Field(default=UserRole.USER, nullable=False) 
+    role: UserRole = Field(default=UserRole.CLIENT, nullable=False) 
     
 class UserCreate(UserBase):
     password: str = Field(min_length=8, max_length=40)

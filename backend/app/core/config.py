@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     DATABASE_PORT: int
     SECRET_KEY: str
     ALGORITHM: str
+    ADMIN_USER: str
+    ADMIN_PASSWORD: str
     # 60 minutes * 24 hours * 8 days = 8 days
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8
     
