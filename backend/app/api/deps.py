@@ -13,7 +13,7 @@ from app.core.config import settings
 from app.models.user import TokenPayload, User
 
 reusable_oauth2 = OAuth2PasswordBearer(
-    tokenUrl="/login/access-token"
+    tokenUrl="/auth/login"
 )
 
 

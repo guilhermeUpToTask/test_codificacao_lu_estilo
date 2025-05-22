@@ -1,21 +1,17 @@
 from datetime import timedelta
 from typing import Annotated, Any
-
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import HTMLResponse
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.core import user_crud
 from app.api.deps import CurrentUser, SessionDep
 from app.core import security
 from app.core.config import settings
-from app.core.security import get_password_hash
-from app.models.user import Message, NewPassword, Token, UserPublic
+from app.models.user import Token, UserCreate, UserPublic, UserRegister
 
+router = APIRouter(tags=["auth"])
 
-router = APIRouter(tags=["login"])
-
-@router.post("/login/access-token")
+@router.post("/login", response_model=Token)
 def login_acces_token(
     session:SessionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 )-> Token:
@@ -42,3 +38,20 @@ def test_token(current_user: CurrentUser) -> Any:
     Test access token
     """
     return current_user
+
+#Refresh token
+
+@router.post("/register", response_model=UserPublic)
+def register_user(session: SessionDep, user_in: UserRegister) -> Any:
+    """
+    Create new user
+    """
+    user = user_crud.get_user_by_email(session=session, email=user_in.email)
+    if user:
+        raise HTTPException(
+            status_code=400,
+            detail="The user with this email already exists in the system"
+        )
+    user_create = UserCreate.model_validate(user_in)
+    user = user_crud.create_user(session=session, user_create=user_create)
+    return user
