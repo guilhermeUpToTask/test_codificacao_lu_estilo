@@ -142,4 +142,4 @@ def delete_order(
 
     session.delete(order)
     session.commit()
-    return
+    return order

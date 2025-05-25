@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query, Depends
-from sqlmodel import UUID, select
+from sqlmodel import select
+from uuid import UUID
 from typing import List, Optional
 from app.api.deps import CurrentUser, SessionDep
 from app.models.client import Client, ClientCreate, ClientRead, ClientUpdate
