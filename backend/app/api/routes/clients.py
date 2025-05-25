@@ -2,13 +2,13 @@ from fastapi import APIRouter, HTTPException, Query, Depends
 from sqlmodel import select
 from uuid import UUID
 from typing import List, Optional
-from app.api.deps import CurrentUser, SessionDep
+from app.api.deps import SessionDep, get_current_user
 from app.models.client import Client, ClientCreate, ClientRead, ClientUpdate
 
 router = APIRouter(prefix="/clients", tags=["Clients"])
 
 
-@router.get("/", response_model=List[ClientRead], dependencies=[Depends(CurrentUser)])
+@router.get("/", response_model=List[ClientRead], dependencies=[Depends(get_current_user)])
 def list_clients(
     *,
     session: SessionDep,
@@ -29,8 +29,8 @@ def list_clients(
     return clients
 
 
-@router.post("/", response_model=ClientRead, dependencies=[Depends(CurrentUser)])
-def create_client(*, session: SessionDep, client: ClientCreate):
+@router.post("/", response_model=ClientRead, dependencies=[Depends(get_current_user)])
+def create_client(session: SessionDep, client: ClientCreate):
     
     email_exists = session.exec(select(Client).where(Client.email == client.email)).first()
     if email_exists:
@@ -47,17 +47,17 @@ def create_client(*, session: SessionDep, client: ClientCreate):
     return db_client
 
 
-@router.get("/{client_id}", response_model=ClientRead, dependencies=[Depends(CurrentUser)])
-def read_client(*, session: SessionDep, client_id: UUID):
+@router.get("/{client_id}", response_model=ClientRead, dependencies=[Depends(get_current_user)])
+def read_client(session: SessionDep, client_id: UUID):
     client = session.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
     return client
 
 
-@router.put("/{client_id}", response_model=ClientRead, dependencies=[Depends(CurrentUser)])
+@router.put("/{client_id}", response_model=ClientRead, dependencies=[Depends(get_current_user)])
 def update_client(
-    *, session: SessionDep, client_id: UUID, client_update: ClientUpdate
+    session: SessionDep, client_id: UUID, client_update: ClientUpdate
 ):
     client = session.get(Client, client_id)
     if not client:
@@ -81,8 +81,8 @@ def update_client(
     return client
 
 
-@router.delete("/{client_id}", dependencies=[Depends(CurrentUser)])
-def delete_client(*, session: SessionDep, client_id: UUID):
+@router.delete("/{client_id}", dependencies=[Depends(get_current_user)])
+def delete_client(session: SessionDep, client_id: UUID):
     client = session.get(Client, client_id)
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")

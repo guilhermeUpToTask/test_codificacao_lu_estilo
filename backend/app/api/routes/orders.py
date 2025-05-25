@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import datetime, date
 from uuid import UUID
 from sqlmodel import select
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, get_current_user
 from app.models.order import (
     Order,
     OrderCreate,
@@ -16,7 +16,7 @@ from app.models.product import Product
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-@router.get("/", response_model=List[OrderRead], dependencies=[Depends(CurrentUser)])
+@router.get("/", response_model=List[OrderRead], dependencies=[Depends(get_current_user)])
 def list_orders(
     *,
     session: SessionDep,
@@ -52,7 +52,7 @@ def list_orders(
     "/",
     response_model=OrderRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(CurrentUser)],
+    dependencies=[Depends(get_current_user)],
 )
 def create_order(
     *,
@@ -97,7 +97,7 @@ def create_order(
     return db_order
 
 
-@router.get("/{order_id}", response_model=OrderRead, dependencies=[Depends(CurrentUser)])
+@router.get("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
 def read_order(
     *,
     session: SessionDep,
@@ -109,7 +109,7 @@ def read_order(
     return order
 
 
-@router.put("/{order_id}", response_model=OrderRead, dependencies=[Depends(CurrentUser)])
+@router.put("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
 def update_order(
     *,
     session: SessionDep,
@@ -130,7 +130,7 @@ def update_order(
     return order
 
 
-@router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(CurrentUser)])
+@router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
 def delete_order(
     *,
     session: SessionDep,

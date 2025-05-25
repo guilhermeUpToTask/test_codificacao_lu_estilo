@@ -3,7 +3,7 @@ from typing import List, Optional
 from uuid import UUID
 from sqlmodel import select
 
-from app.api.deps import SessionDep, CurrentUser
+from app.api.deps import SessionDep, get_current_user
 from app.models.product import (
     Product,
     ProductCreate,
@@ -15,7 +15,7 @@ from app.models.product import (
 router = APIRouter(prefix="/products", tags=["Products"])
 
 
-@router.get("/", response_model=List[ProductRead], dependencies=[Depends(CurrentUser)])
+@router.get("/", response_model=List[ProductRead], dependencies=[Depends(get_current_user)])
 def list_products(
     *,
     session: SessionDep,
@@ -45,7 +45,7 @@ def list_products(
     "/",
     response_model=ProductRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(CurrentUser)],
+    dependencies=[Depends(get_current_user)],
 )
 def create_product(
     *,
@@ -72,7 +72,7 @@ def create_product(
     return db_product
 
 
-@router.get("/{product_id}", response_model=ProductRead, dependencies=[Depends(CurrentUser)])
+@router.get("/{product_id}", response_model=ProductRead, dependencies=[Depends(get_current_user)])
 def read_product(
     *,
     session: SessionDep,
@@ -84,7 +84,7 @@ def read_product(
     return product
 
 
-@router.put("/{product_id}", response_model=ProductRead, dependencies=[Depends(CurrentUser)])
+@router.put("/{product_id}", response_model=ProductRead, dependencies=[Depends(get_current_user)])
 def update_product(
     *,
     session: SessionDep,
@@ -114,7 +114,7 @@ def update_product(
     return product
 
 
-@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(CurrentUser)])
+@router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
 def delete_product(
     *,
     session: SessionDep,
