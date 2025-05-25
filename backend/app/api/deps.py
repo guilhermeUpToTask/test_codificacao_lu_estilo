@@ -35,8 +35,7 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Could not validate credentials",
-        )
-        
+        )  
     try:
         user_id = uuid.UUID(token_data.sub)
     except (ValueError, TypeError):
