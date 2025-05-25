@@ -9,7 +9,7 @@ from app.core import security
 from app.core.config import settings
 from app.models.user import Token, UserCreate, UserPublic, UserRegister
 
-router = APIRouter(tags=["auth"])
+router = APIRouter(tags=["auth"], prefix="/auth")
 
 @router.post("/login", response_model=Token)
 def login_acces_token(

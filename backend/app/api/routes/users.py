@@ -83,6 +83,22 @@ def delete_user_me(session:SessionDep, current_user:CurrentUser) -> Any:
 
 
 #Private routes
+@router.get("/", response_model=list[UserPublic])
+def read_users(
+    session: SessionDep, current_user: CurrentUser, skip: int = 0, limit: int = 100
+) -> Any:
+    """
+    Get all users.
+    """
+    if not current_user.is_superuser:
+        raise HTTPException(
+            status_code=403,
+            detail="The user doesn't have enough privileges",
+        )
+    statement = select(User).offset(skip).limit(limit)
+    users = session.exec(statement).all()
+    return users
+
 @router.get("/{user_id}", response_model=UserPublic)
 def read_user_by_id(
     user_id: uuid.UUID, session: SessionDep, current_user: CurrentUser
