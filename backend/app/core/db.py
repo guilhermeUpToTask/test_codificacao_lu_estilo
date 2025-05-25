@@ -22,7 +22,7 @@ engine = create_engine(url_object, echo=True)
 
 def init_db(session: Session) -> None:
     SQLModel.metadata.create_all(engine)
-
+    
     user = session.exec(
         select(User).where(User.email == settings.ADMIN_USER)
     ).first()

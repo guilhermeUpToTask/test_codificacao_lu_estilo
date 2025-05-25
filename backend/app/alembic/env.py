@@ -15,7 +15,7 @@ fileConfig(config.config_file_name)
 from app.core.config import settings # noqa
 from sqlmodel import SQLModel
 #import models
-
+from app.models.user import User
 # Target metadata for Alembic
 target_metadata = SQLModel.metadata
 
