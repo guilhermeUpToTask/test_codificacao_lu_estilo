@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, Query, status
 from typing import List, Optional
 from datetime import datetime, date
 from uuid import UUID
-from sqlmodel import select
+from sqlmodel import delete, select
 from app.api.deps import SessionDep, get_current_user
 from app.models.order import (
     Order,
@@ -45,7 +45,16 @@ def list_orders(
         # Join with items to filter by product section
         query = query.join(Order.items).where(OrderItem.section == section)
 
-    return session.exec(query.offset(skip).limit(limit)).all()
+    orders: List[Order] = session.exec(query.offset(skip).limit(limit)).all()
+        
+    result: List[OrderRead] = []
+    for o in orders:
+        data = o.model_dump(exclude={"items"})
+        # items: list of OrderItemRead
+        items = [OrderItem.model_validate(i) for i in o.items]
+        data["items"] = [i.model_dump() for i in items]
+        result.append(OrderRead(**data))
+    return result
 
 
 @router.post(
@@ -94,7 +103,9 @@ def create_order(
     session.commit()
     session.refresh(db_order)
 
-    return db_order
+    data = db_order.model_dump(exclude={"items"})
+    data["items"] = [item.model_dump() for item in db_order.items]
+    return OrderRead(**data)
 
 
 @router.get("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
@@ -106,7 +117,10 @@ def read_order(
     order = session.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    return order
+    
+    data = order.model_dump(exclude={"items"})
+    data["items"] = [item.model_dump() for item in order.items]
+    return OrderRead(**data)
 
 
 @router.put("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
@@ -127,7 +141,10 @@ def update_order(
     session.add(order)
     session.commit()
     session.refresh(order)
-    return order
+    
+    data = order.model_dump(exclude={"items"})
+    data["items"] = [item.model_dump() for item in order.items]
+    return OrderRead(**data)
 
 
 @router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
@@ -140,6 +157,9 @@ def delete_order(
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
 
+    session.exec(delete(OrderItem).where(OrderItem.order_id == order_id))
+    
     session.delete(order)
     session.commit()
-    return order
+    
+    return None

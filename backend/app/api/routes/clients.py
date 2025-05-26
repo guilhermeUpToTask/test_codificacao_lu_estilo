@@ -60,24 +60,26 @@ def update_client(
     session: SessionDep, client_id: UUID, client_update: ClientUpdate
 ):
     client = session.get(Client, client_id)
+    
     if not client:
         raise HTTPException(status_code=404, detail="Client not found")
-
     if client_update.email and client_update.email != client.email:
         email_exists = session.exec(select(Client).where(Client.email == client_update.email)).first()
         if email_exists:
             raise HTTPException(status_code=400, detail="Email already registered")
-
     if client_update.cpf and client_update.cpf != client.cpf:
         cpf_exists = session.exec(select(Client).where(Client.cpf == client_update.cpf)).first()
         if cpf_exists:
             raise HTTPException(status_code=400, detail="CPF already registered")
 
     client_data = client_update.model_dump(exclude_unset=True)
-    client_update.sqlmodel_update(client_data)
-    session.add(client_update)
+    
+    client.sqlmodel_update(client_data)
+    session.add(client)
+    
     session.commit()
     session.refresh(client)
+    
     return client
 
 

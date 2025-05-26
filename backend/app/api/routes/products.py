@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, status
 from typing import List, Optional
 from uuid import UUID
-from sqlmodel import select
+from sqlmodel import delete, select
 
 from app.api.deps import SessionDep, get_current_user
 from app.models.product import (
@@ -38,7 +38,15 @@ def list_products(
     elif available is False:
         query = query.where(Product.initial_stock <= 0)
 
-    return session.exec(query.offset(skip).limit(limit)).all()
+    result = session.exec(query.offset(skip).limit(limit)).all()
+    products = []
+    
+    for product in result:
+        data = product.model_dump(exclude={"images"})
+        data["images"] = [img.url for img in product.images]
+        products.append(data)
+        
+    return products
 
 
 @router.post(
@@ -56,8 +64,11 @@ def create_product(
     existing = session.exec(select(Product).where(Product.barcode == product_in.barcode)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Barcode already in use")
-
-    db_product = Product.model_validate(product_in)
+    
+    # Create product without images
+    data = product_in.model_dump(exclude={"images"})
+    db_product = Product(**data)
+    
     session.add(db_product)
     session.commit()
     session.refresh(db_product)
@@ -66,10 +77,13 @@ def create_product(
     for url in product_in.images:
         img = ProductImage(product_id=db_product.id, url=url)
         session.add(img)
+        
     session.commit()
     session.refresh(db_product)
 
-    return db_product
+    result = db_product.model_dump()
+    result["images"] = [img.url for img in db_product.images]
+    return result
 
 
 @router.get("/{product_id}", response_model=ProductRead, dependencies=[Depends(get_current_user)])
@@ -81,7 +95,12 @@ def read_product(
     product = session.get(Product, product_id)
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return product
+    
+    data = product.model_dump(exclude={"images"})
+    data["images"] = [img.url for img in product.images]
+
+    return ProductRead(**data)
+
 
 
 @router.put("/{product_id}", response_model=ProductRead, dependencies=[Depends(get_current_user)])
@@ -111,7 +130,10 @@ def update_product(
     session.add(product)
     session.commit()
     session.refresh(product)
-    return product
+    
+    result = product.model_dump()
+    result["images"] = [img.url for img in product.images]
+    return result
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
@@ -124,6 +146,9 @@ def delete_product(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
+    # delete all image rows first
+    session.exec(delete(ProductImage).where(ProductImage.product_id == product.id))
     session.delete(product)
     session.commit()
-    return product
+    
+    return None
