@@ -16,7 +16,31 @@ def login_acces_token(
     session:SessionDep, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
 )-> Token:
     """
-    OAuth2 compatible token login, get an access token for future requests
+    Autenticação OAuth2 para obtenção de token de acesso
+
+    Example Request (form data):
+    ```
+    username: user@example.com
+    password: string
+    ```
+
+    Example Response:
+    ```json
+    {
+        "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+        "token_type": "bearer"
+    }
+    ```
+
+    Regras de Negócio:
+    - O email e senha devem corresponder a um usuário cadastrado
+    - Usuários inativos não podem obter tokens
+    - O token expira após 30 minutos (configurável nas settings)
+    
+    Casos de Uso:
+    - Autenticação de usuários para acesso à API
+    - Geração de token JWT para requisições subsequentes
+    - Integração com sistemas OAuth2 compatíveis
     """
     user = user_crud.authenticate(
         session=session, email=form_data.username, password=form_data.password
@@ -24,7 +48,7 @@ def login_acces_token(
     if not user:
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     elif not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive User")
+        raise HTTPException(status_code=400, detail="Usuário inativo")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return Token(
         access_token=security.create_access_token(
@@ -35,16 +59,69 @@ def login_acces_token(
 @router.post("/login/test-token", response_model=UserPublic)
 def test_token(current_user: CurrentUser) -> Any:
     """
-    Test access token
+    Validação de token de acesso
+
+    Example Request Headers:
+    ```
+    Authorization: Bearer <access_token>
+    ```
+
+    Example Response:
+    ```json
+    {
+        "id": 1,
+        "email": "user@example.com",
+        "full_name": "João Silva",
+        "is_active": true
+    }
+    ```
+
+    Regras de Negócio:
+    - O token deve ser válido e não expirado
+    - Retorna os dados do usuário associado ao token
+    - Apenas usuários ativos podem ter tokens válidos
+
+    Casos de Uso:
+    - Verificação da validade do token
+    - Obtenção rápida dos dados do usuário autenticado
+    - Teste de conexão com a API usando credenciais
     """
     return current_user
-
-#Refresh token
 
 @router.post("/register", response_model=UserPublic)
 def register_user(session: SessionDep, user_in: UserRegister) -> Any:
     """
-    Create new user
+    Cadastro de novo usuário
+
+    Example Request:
+    ```json
+    {
+        "email": "novo@example.com",
+        "password": "SenhaSegura123!",
+        "full_name": "Maria Oliveira"
+    }
+    ```
+
+    Example Response:
+    ```json
+    {
+        "id": 2,
+        "email": "novo@example.com",
+        "full_name": "Maria Oliveira",
+        "is_active": true
+    }
+    ```
+
+    Regras de Negócio:
+    - O email deve ser único no sistema
+    - Senha deve ter pelo menos 8 caracteres
+    - Usuário é ativado automaticamente após cadastro
+    - Campos obrigatórios: email, password, full_name
+
+    Casos de Uso:
+    - Registro de novos usuários na plataforma
+    - Criação de contas para acesso ao sistema
+    - Integração com formulários de cadastro
     """
     user = user_crud.get_user_by_email(session=session, email=user_in.email)
     if user:

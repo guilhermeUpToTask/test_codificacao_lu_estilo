@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, status
+from fastapi import APIRouter, HTTPException, Depends, Query, Body, status
 from typing import List, Optional
 from datetime import datetime, date
 from uuid import UUID
@@ -13,22 +13,69 @@ from app.models.order import (
 )
 from app.models.product import Product
 
-router = APIRouter(prefix="/orders", tags=["Orders"])
+router = APIRouter(
+    prefix="/orders",
+    tags=["Pedidos"],
+    dependencies=[Depends(get_current_user)],
+    responses={
+        401: {"description": "Não autorizado - token inválido ou inexistente"},
+        403: {"description": "Acesso proibido"}
+    }
+)
 
+@router.get(
+    "/",
+    response_model=List[OrderRead],
+    summary="Listar pedidos",
+    description="""
+Retorna uma lista de pedidos filtrados de acordo com parâmetros opcionais.
 
-@router.get("/", response_model=List[OrderRead], dependencies=[Depends(get_current_user)])
+Regras de negócio:
+- Se não houver filtros, retorna todos os pedidos paginados.
+- Filtros por data consideram inclusive o início e fim do dia.
+- Filtro por seção retorna apenas pedidos contendo itens na seção especificada.
+
+Casos de uso:
+- Administradores verificam histórico de vendas.
+- Clientes acompanham seus pedidos.
+""",
+    responses={
+        200: {
+            "description": "Lista de pedidos retornada com sucesso",
+            "content": {
+                "application/json": {
+                    "example": [
+                        {
+                            "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                            "client_id": "1c9d4f1a-3b69-4c9b-8f8b-1234567890ab",
+                            "order_date": "2025-05-20T14:30:00",
+                            "status": "PENDING",
+                            "items": [
+                                {
+                                    "product_id": "5b1a6a1f-2b3c-4d5e-9f0a-abcdef123456",
+                                    "quantity": 2,
+                                    "unit_price": 49.90,
+                                    "section": "eletrônicos"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }
+    }
+)
 def list_orders(
     *,
     session: SessionDep,
-    # Filters
-    start_date: Optional[date] = Query(None, description="Start of order period"),
-    end_date: Optional[date] = Query(None, description="End of order period"),
-    section: Optional[str] = Query(None, description="Filter by product section"),
-    order_id: Optional[UUID] = Query(None, description="Filter by order ID"),
-    status: Optional[str] = Query(None, description="Filter by order status"),
-    client_id: Optional[UUID] = Query(None, description="Filter by client ID"),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(10, ge=1),
+    start_date: Optional[date] = Query(None, description="Início do período de pedidos (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="Fim do período de pedidos (YYYY-MM-DD)"),
+    section: Optional[str] = Query(None, description="Filtrar por seção do produto"),
+    order_id: Optional[UUID] = Query(None, description="Filtrar por ID do pedido"),
+    status: Optional[str] = Query(None, description="Filtrar por status do pedido"),
+    client_id: Optional[UUID] = Query(None, description="Filtrar por ID do cliente"),
+    skip: int = Query(0, ge=0, description="Quantidade de registros a pular para paginação"),
+    limit: int = Query(10, ge=1, description="Quantidade máxima de registros a retornar"),
 ):
     query = select(Order)
     if start_date:
@@ -42,15 +89,12 @@ def list_orders(
     if client_id:
         query = query.where(Order.client_id == client_id)
     if section:
-        # Join with items to filter by product section
         query = query.join(Order.items).where(OrderItem.section == section)
 
     orders: List[Order] = session.exec(query.offset(skip).limit(limit)).all()
-        
     result: List[OrderRead] = []
     for o in orders:
         data = o.model_dump(exclude={"items"})
-        # items: list of OrderItemRead
         items = [OrderItem.model_validate(i) for i in o.items]
         data["items"] = [i.model_dump() for i in items]
         result.append(OrderRead(**data))
@@ -61,14 +105,33 @@ def list_orders(
     "/",
     response_model=OrderRead,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(get_current_user)],
+    summary="Criar novo pedido",
+    description="""
+Cria um novo pedido após validar disponibilidade de estoque.
+
+Regras de negócio:
+- Verifica se cada produto existe; caso não, retorna 404.
+- Verifica estoque mínimo; se insuficiente, retorna 400.
+- Deduz quantidade do estoque e cria itens associados ao pedido.
+""",
 )
 def create_order(
     *,
     session: SessionDep,
-    order_in: OrderCreate,
+    order_in: OrderCreate = Body(..., 
+        examples={
+            "pedido_valido": {
+                "summary": "Exemplo de pedido válido",
+                "value": {
+                    "client_id": "1c9d4f1a-3b69-4c9b-8f8b-1234567890ab",
+                    "items": [
+                        {"product_id": "5b1a6a1f-2b3c-4d5e-9f0a-abcdef123456", "quantity": 2, "unit_price": 49.90, "section": "eletrônicos"}
+                    ]
+                }
+            }
+        }
+    ),
 ):
-    # Validate stock availability
     for item in order_in.items:
         product = session.get(Product, item.product_id)
         if not product:
@@ -79,19 +142,15 @@ def create_order(
                 detail=f"Insufficient stock for product {item.product_id}",
             )
 
-    # Create order
     db_order = Order(client_id=order_in.client_id)
     session.add(db_order)
     session.commit()
     session.refresh(db_order)
 
-    # Deduct stock and create items
     for item in order_in.items:
-        # Deduct
         product = session.get(Product, item.product_id)
         product.initial_stock -= item.quantity
         session.add(product)
-        # Create item
         order_item = OrderItem(
             order_id=db_order.id,
             product_id=item.product_id,
@@ -108,7 +167,20 @@ def create_order(
     return OrderRead(**data)
 
 
-@router.get("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
+@router.get(
+    "/{order_id}",
+    response_model=OrderRead,
+    summary="Obter um pedido",
+    description="""
+Retorna os detalhes de um pedido específico pelo seu ID.
+
+Casos de uso:
+- Visualização de status e histórico de um pedido.
+""",
+    responses={
+        404: {"description": "Order not found"}
+    }
+)
 def read_order(
     *,
     session: SessionDep,
@@ -117,37 +189,68 @@ def read_order(
     order = session.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    
     data = order.model_dump(exclude={"items"})
     data["items"] = [item.model_dump() for item in order.items]
     return OrderRead(**data)
 
 
-@router.put("/{order_id}", response_model=OrderRead, dependencies=[Depends(get_current_user)])
+@router.put(
+    "/{order_id}",
+    response_model=OrderRead,
+    summary="Atualizar status de pedido",
+    description="""
+Atualiza o status de um pedido existente.
+
+Regras de negócio:
+- Apenas o campo `status` pode ser alterado via este endpoint.
+- Registra timestamp de atualização.
+""",
+    responses={
+        404: {"description": "Order not found"}
+    }
+)
 def update_order(
     *,
     session: SessionDep,
     order_id: UUID,
-    order_up: OrderUpdate,
+    order_up: OrderUpdate = Body(...,
+        examples={
+            "exemplo_atualizacao": {
+                "summary": "Atualização de status para ENTREGUE",
+                "value": {"status": "DELIVERED"}
+            }
+        }
+    ),
 ):
     order = session.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-
     if order_up.status:
         order.status = order_up.status
     order.updated_at = datetime.utcnow()
-
     session.add(order)
     session.commit()
     session.refresh(order)
-    
     data = order.model_dump(exclude={"items"})
     data["items"] = [item.model_dump() for item in order.items]
     return OrderRead(**data)
 
 
-@router.delete("/{order_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(get_current_user)])
+@router.delete(
+    "/{order_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Excluir pedido",
+    description="""
+Remove um pedido e seus itens do sistema.
+
+Casos de uso:
+- Cancelamento definitivo de pedidos não entregues.
+""",
+    responses={
+        404: {"description": "Pedido não encontrado"},
+        204: {"description": "Pedido excluído com sucesso"}
+    }
+)
 def delete_order(
     *,
     session: SessionDep,
@@ -156,10 +259,7 @@ def delete_order(
     order = session.get(Order, order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-
     session.exec(delete(OrderItem).where(OrderItem.order_id == order_id))
-    
     session.delete(order)
     session.commit()
-    
     return None
